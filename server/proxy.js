@@ -18,7 +18,7 @@
 
   access_token = "2.00qE4goBVfeVJE34ddea717fCynh5D";
 
-  FOLLOWERS_LOW_LIMIT = 1000;
+  FOLLOWERS_LOW_LIMIT = 500;
 
   users = [];
 

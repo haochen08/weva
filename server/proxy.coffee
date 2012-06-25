@@ -9,7 +9,7 @@ weibo_host_v1 = "api.t.sina.com.cn"  #http, for weibo search API
 weibo_host_v2 = "api.weibo.com" #https, for other APIs
 app_key = "3805062853"
 access_token = "2.00qE4goBVfeVJE34ddea717fCynh5D"
-FOLLOWERS_LOW_LIMIT = 1000
+FOLLOWERS_LOW_LIMIT = 500
 users = []
 
 server = http.createServer (req, resp) ->
