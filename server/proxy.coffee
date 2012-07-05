@@ -34,16 +34,17 @@ server = http.createServer (req, resp) ->
       res.on 'end',  ->
         content = JSON.parse(raw)['results']
         if content?
-          update_accesstoken()
-          q = async.queue analyze, content.length
-          q.push content
-          q.drain = ->
-            content = (weibo for weibo in content when weibo['user_followers_count'] >= FOLLOWERS_LOW_LIMIT)
-            data = JSON.stringify('results': content)
-            resp.writeHead 200, 
-              "Content-Type": "text/json"
-            resp.write data, "utf8"
-            resp.end()
+          update_accesstoken (err) ->
+            if !err
+              q = async.queue analyze, content.length
+              q.push content
+              q.drain = ->
+                content = (weibo for weibo in content when weibo['user_followers_count'] >= FOLLOWERS_LOW_LIMIT)
+                data = JSON.stringify('results': content)
+                resp.writeHead 200, 
+                  "Content-Type": "text/json"
+                resp.write data, "utf8"
+                resp.end()
 
     client.on 'error', (e) ->
       console.log "Request weibo with error "+e.message
@@ -51,43 +52,51 @@ server = http.createServer (req, resp) ->
 
 server.listen 8000
 
-get_weibo_cookie = (cookie_str) ->
+get_weibo_cookie = (callback) ->
   cookie = []
   db = new sqlite3.Database(WEIBO_COOKIE_PATH)
   db.serialize ->
-    db.each "select host_key, path, secure, expires_utc, name, value from cookies where host_key='.weibo.com'", (err, row) ->
+    db.all "select host_key, path, secure, expires_utc, name, value from cookies where host_key='.weibo.com'", (err, rows) ->
       if !err
-        cookie.push row.name + "=" + row.value
-    cookie_str = cookie.join ';'
+        cookie.push row.name + "=" + row.value for row in rows
+      callback err, cookie.join ';'
 
   db.close()
   
    
-update_accesstoken = ->
+update_accesstoken = (callback) ->
   #token_expire_time -= ((new Date().getTime()) - lastTime.getTime()) / 1000
   weibo_cookie = ''
   if token_expire_time < TOKEN_EXPIRE_THRESHOLD
-    get_weibo_cookie(weibo_cookie)
-    console.log "the weibo cookie is "+weibo_cookie
-    options = 
-      host: token_gate_host
-      path: "?app_key="+app_key+"&_t=0"
-      method: "GET"
-      headers: 
-        Cookie: weibo_cookie
-        Referer: "http://open.weibo.com/tools/console" 
-    client = http.request options, (res) ->
-      res.setEncoding 'utf8'
-      raw = ""
-      res.on 'data', (chunk) ->
-        raw += chunk
-      res.on 'end', ->
-        data = JSON.parse(raw)
-        if data.token?
-          access_token = data.token
-          console.log "token refreshed.."
-        if data.expires_in?
-          token_expire_time = data.expires_in
+    get_weibo_cookie (err, weibo_cookie) ->
+      if !err
+        console.log "the weibo cookie is "+weibo_cookie
+        options = 
+          host: token_gate_host
+          path: "?app_key="+app_key+"&_t=0"
+          method: "GET"
+          headers: 
+            Cookie: weibo_cookie
+            Referer: "http://open.weibo.com/tools/console" 
+        client = http.request options, (res) ->
+          res.setEncoding 'utf8'
+          raw = ""
+          res.on 'data', (chunk) ->
+            raw += chunk
+          res.on 'end', ->
+            data = JSON.parse(raw)
+            if data.token?
+              access_token = data.token
+              console.log "token refreshed.."
+            if data.expires_in?
+              token_expire_time = data.expires_in
+            callback true
+        client.on 'error', (e) ->
+          callback false
+      else
+        callback false
+  else
+    callback true
           
 # add user information to the weibo
 analyze = (weibo, callback) ->

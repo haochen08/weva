@@ -51,34 +51,38 @@
           return raw += chunk;
         });
         return res.on('end', function() {
-          var content, q;
+          var content;
           content = JSON.parse(raw)['results'];
           if (content != null) {
-            update_accesstoken();
-            q = async.queue(analyze, content.length);
-            q.push(content);
-            return q.drain = function() {
-              var data, weibo;
-              content = (function() {
-                var _i, _len, _results;
-                _results = [];
-                for (_i = 0, _len = content.length; _i < _len; _i++) {
-                  weibo = content[_i];
-                  if (weibo['user_followers_count'] >= FOLLOWERS_LOW_LIMIT) {
-                    _results.push(weibo);
-                  }
-                }
-                return _results;
-              })();
-              data = JSON.stringify({
-                'results': content
-              });
-              resp.writeHead(200, {
-                "Content-Type": "text/json"
-              });
-              resp.write(data, "utf8");
-              return resp.end();
-            };
+            return update_accesstoken(function(err) {
+              var q;
+              if (!err) {
+                q = async.queue(analyze, content.length);
+                q.push(content);
+                return q.drain = function() {
+                  var data, weibo;
+                  content = (function() {
+                    var _i, _len, _results;
+                    _results = [];
+                    for (_i = 0, _len = content.length; _i < _len; _i++) {
+                      weibo = content[_i];
+                      if (weibo['user_followers_count'] >= FOLLOWERS_LOW_LIMIT) {
+                        _results.push(weibo);
+                      }
+                    }
+                    return _results;
+                  })();
+                  data = JSON.stringify({
+                    'results': content
+                  });
+                  resp.writeHead(200, {
+                    "Content-Type": "text/json"
+                  });
+                  resp.write(data, "utf8");
+                  return resp.end();
+                };
+              }
+            });
           }
         });
       });
@@ -91,55 +95,71 @@
 
   server.listen(8000);
 
-  get_weibo_cookie = function(cookie_str) {
+  get_weibo_cookie = function(callback) {
     var cookie, db;
     cookie = [];
     db = new sqlite3.Database(WEIBO_COOKIE_PATH);
     db.serialize(function() {
-      db.each("select host_key, path, secure, expires_utc, name, value from cookies where host_key='.weibo.com'", function(err, row) {
+      return db.all("select host_key, path, secure, expires_utc, name, value from cookies where host_key='.weibo.com'", function(err, rows) {
+        var row, _i, _len;
         if (!err) {
-          return cookie.push(row.name + "=" + row.value);
+          for (_i = 0, _len = rows.length; _i < _len; _i++) {
+            row = rows[_i];
+            cookie.push(row.name + "=" + row.value);
+          }
         }
+        return callback(err, cookie.join(';'));
       });
-      return cookie_str = cookie.join(';');
     });
     return db.close();
   };
 
-  update_accesstoken = function() {
-    var client, options, weibo_cookie;
+  update_accesstoken = function(callback) {
+    var weibo_cookie;
     weibo_cookie = '';
     if (token_expire_time < TOKEN_EXPIRE_THRESHOLD) {
-      get_weibo_cookie(weibo_cookie);
-      console.log("the weibo cookie is " + weibo_cookie);
-      options = {
-        host: token_gate_host,
-        path: "?app_key=" + app_key + "&_t=0",
-        method: "GET",
-        headers: {
-          Cookie: weibo_cookie,
-          Referer: "http://open.weibo.com/tools/console"
+      return get_weibo_cookie(function(err, weibo_cookie) {
+        var client, options;
+        if (!err) {
+          console.log("the weibo cookie is " + weibo_cookie);
+          options = {
+            host: token_gate_host,
+            path: "?app_key=" + app_key + "&_t=0",
+            method: "GET",
+            headers: {
+              Cookie: weibo_cookie,
+              Referer: "http://open.weibo.com/tools/console"
+            }
+          };
+          client = http.request(options, function(res) {
+            var raw;
+            res.setEncoding('utf8');
+            raw = "";
+            res.on('data', function(chunk) {
+              return raw += chunk;
+            });
+            return res.on('end', function() {
+              var data;
+              data = JSON.parse(raw);
+              if (data.token != null) {
+                access_token = data.token;
+                console.log("token refreshed..");
+              }
+              if (data.expires_in != null) {
+                token_expire_time = data.expires_in;
+              }
+              return callback(true);
+            });
+          });
+          return client.on('error', function(e) {
+            return callback(false);
+          });
+        } else {
+          return callback(false);
         }
-      };
-      return client = http.request(options, function(res) {
-        var raw;
-        res.setEncoding('utf8');
-        raw = "";
-        res.on('data', function(chunk) {
-          return raw += chunk;
-        });
-        return res.on('end', function() {
-          var data;
-          data = JSON.parse(raw);
-          if (data.token != null) {
-            access_token = data.token;
-            console.log("token refreshed..");
-          }
-          if (data.expires_in != null) {
-            return token_expire_time = data.expires_in;
-          }
-        });
       });
+    } else {
+      return callback(true);
     }
   };
 
