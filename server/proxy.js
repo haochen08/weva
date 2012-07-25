@@ -14,7 +14,7 @@
 
   weibo_host_v2 = "api.weibo.com";
 
-  token_gate_host = "open.weibo.com/tools/aj_apitest.php";
+  token_gate_host = "open.weibo.com";
 
   app_key = "3805062853";
 
@@ -124,26 +124,25 @@
           console.log("the weibo cookie is " + weibo_cookie);
           options = {
             host: token_gate_host,
-            path: "?app_key=" + app_key + "&_t=0",
-            method: "GET",
-            headers: {
-              Cookie: weibo_cookie,
-              Referer: "http://open.weibo.com/tools/console"
-            }
+            path: "/tools/aj_apitest.php?appkey=" + app_key,
+            method: "GET"
           };
+          console.log(options);
           client = http.request(options, function(res) {
             var raw;
             res.setEncoding('utf8');
             raw = "";
             res.on('data', function(chunk) {
-              return raw += chunk;
+              raw += chunk;
+              return console.log("Get data" + chunk);
             });
             return res.on('end', function() {
               var data;
+              console.log("parse token finished..");
               data = JSON.parse(raw);
               if (data.token != null) {
                 access_token = data.token;
-                console.log("token refreshed..");
+                console.log("token refreshed with " + access_token);
               }
               if (data.expires_in != null) {
                 token_expire_time = data.expires_in;

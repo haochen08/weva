@@ -7,7 +7,7 @@ async = require 'async'
 sqlite3 = require 'sqlite3'
 weibo_host_v1 = "api.t.sina.com.cn"  #http, for weibo search API
 weibo_host_v2 = "api.weibo.com" #https, for other APIs
-token_gate_host = "open.weibo.com/tools/aj_apitest.php"
+token_gate_host = "open.weibo.com"
 app_key = "3805062853"
 app_secret="3068b083821c6172522ad61d6bdd7b62"
 access_token = "2.00qE4goBVfeVJE7d6c1b66670jByjZ"
@@ -73,21 +73,23 @@ update_accesstoken = (callback) ->
         console.log "the weibo cookie is "+weibo_cookie
         options = 
           host: token_gate_host
-          path: "?app_key="+app_key+"&_t=0"
+          path: "/tools/aj_apitest.php?appkey="+app_key
           method: "GET"
-          headers: 
-            Cookie: weibo_cookie
-            Referer: "http://open.weibo.com/tools/console" 
+          #headers: 
+           # 'Cookie': weibo_cookie
+        console.log options   
         client = http.request options, (res) ->
           res.setEncoding 'utf8'
           raw = ""
           res.on 'data', (chunk) ->
             raw += chunk
+            console.log "Get data"+chunk
           res.on 'end', ->
+            console.log "parse token finished.."
             data = JSON.parse(raw)
             if data.token?
               access_token = data.token
-              console.log "token refreshed.."
+              console.log "token refreshed with "+access_token
             if data.expires_in?
               token_expire_time = data.expires_in
             callback true
